@@ -4,15 +4,15 @@ CPU = {% if cpu is none %} "1" {% else %} "{{ cpu }}" {% endif %}
 MEM = {% if mem is none %} "1024" {% else %} "{{ mem }}" {% endif %}  
 
 Vagrant.configure("2") do |config|
-    config.vm.box = {% if boxname is none  %} "generic/rocky8" {% else %} "{{ boxname }}" {% endif %}  
+    config.vm.box = "{{ boxname }}"  
     config.vm.box_version = "4.3.12"
     config.vm.box_check_update = false
-    {% if hostname is not none  %} config.vm.hostname = "{{ hostname }}" {% endif %}
+    config.vm.hostname = "{{ hostname }}"
     config.vm.synced_folder ".", "/vagrant", disabled: false
     config.vbguest.auto_update = false
     
     config.vm.provider "virtualbox" do |vbox, override|
-	vbox.name = "TestVM"
+	vbox.name = "{{ hostname }}"
 	vbox.cpus = CPU
 	vbox.memory = MEM
 	vbox.gui = false
@@ -20,14 +20,14 @@ Vagrant.configure("2") do |config|
     end
 
     config.vm.provider "libvirt" do |kvm, override|
-	kvm.title = "TestVM"
+	kvm.title = "{{ hostname }}"
 	kvm.cpus = CPU
 	kvm.memory = MEM
 	kvm.cputopology :sockets => '1', :cores => CPU, :threads => '1'
     end
 
   config.vm.provider "vmware_desktop" do |vmw, override|    
-      vmw.vmx['displayname'] = "TestVM"
+      vmw.vmx['displayname'] = "{{ hostname }}"
       vmw.vmx["numvcpus"] = CPU
       vmw.vmx["memsize"] = MEM
       vmw.vmx["cpuid.coresPerSocket"] = "1"

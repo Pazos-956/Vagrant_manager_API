@@ -8,7 +8,7 @@
 
 HOSTNAME_VM="Manager-API"
 CPU=4
-MEM=3072
+MEM=4096
 
 Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/jammy64"

@@ -5,20 +5,20 @@ from sqlmodel import Field, SQLModel, create_engine, Session
 router = APIRouter()
 
 class Vm(SQLModel, table=True):
-    vm_id: int = Field(primary_key=True)
+    vm_id: int | None = Field(default=None, primary_key=True)
     vm_name: str = Field(index=True)
     cpu: int
     mem: int
     space: int
-    env_id: int = Field(foreign_key="venv.env_id")
+    env_id: int |None = Field(default = None, foreign_key="venv.env_id")
 
 class Venv(SQLModel, table=True):
-    env_id: int = Field(primary_key=True)
+    env_id: int | None = Field(default=None, primary_key=True)
     env_name: str = Field(index=True)
-    host_id: int = Field(foreign_key="host.host_id")
+    host_id: int | None = Field(default = None, foreign_key="host.host_id")
 
 class Host(SQLModel, table=True):
-    host_id: int = Field(primary_key=True)
+    host_id: int | None = Field(default=None, primary_key=True)
     cpu_total: int
     mem_total: int
     space_total: int

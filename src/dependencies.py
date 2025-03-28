@@ -34,19 +34,18 @@ def vagrant_run(path):
 
 
 class Temp_info(BaseModel):
-    cpu: int | None = None
-    mem: int | None = None
-    boxname: str | None = None
-    hostname: str | None = None
+    cpu: int = 1
+    mem: int = 1024
+    boxname: str = "generic/rocky8"
+    hostname: str 
+    provider: str = "virtualbox"
 
 # Convertir en cm para cambiar de directorio?
-def load_template(temp_info):
+def load_template(path, temp_info):
     env = Environment(loader=FileSystemLoader("/vagrant/src/templates/"))
     template = env.get_template("vagrantfile.template")
-    
-    if temp_info == None:
-        temp_info = Temp_info()
     contenido = template.render(temp_info)
 
-    file = open("Vagrantfile", "w")
-    file.write(contenido)
+    vfile = os.path.abspath(path+"/Vagrantfile")
+    with open(vfile, "w") as file:
+        file.write(contenido)
