@@ -3,10 +3,8 @@
 sudo apt-get update
 
 # Instalar FastApi
-sudo apt-get install -y python3-pip
-pip install "fastapi[standard]"
-pip install "python-vagrant"
-pip install Jinja2
+sudo apt-get install -y python3-pip sqlite3
+pip install "fastapi[standard]" "python-vagrant" Jinja2 sqlmodel
 
 sudo systemctl stop networkd-dispatcher.service unattended-upgrades.service
 
@@ -39,3 +37,5 @@ echo "export TERM=xterm" >> .profile
 
 sudo systemctl start networkd-dispatcher.service unattended-upgrades.service
 
+mkdir /home/vagrant/users
+chown vagrant:vagrant /home/vagrant/users

@@ -24,6 +24,7 @@ Vagrant.configure("2") do |config|
 
   config.vm.network "private_network", ip: "192.168.60.10"
   config.vm.network "forwarded_port", guest: 80, host: 8080
+  config.vm.network "forwarded_port", guest: 8000, host: 8000
 
   config.vm.provider "virtualbox" do |vbox,  override|
     vbox.customize ['modifyvm', :id, '--nested-hw-virt', 'on']

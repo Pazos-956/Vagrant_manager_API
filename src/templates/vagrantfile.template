@@ -1,20 +1,15 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
-CPU = {% if hostname %} "{{ cpu }}" {% else %} "1" {% endif %} 
-MEM = {% if hostname %} "{{ mem }}" {% else %} "1024" {% endif %}  
+CPU = {% if cpu is none %} "1" {% else %} "{{ cpu }}" {% endif %} 
+MEM = {% if mem is none %} "1024" {% else %} "{{ mem }}" {% endif %}  
 
 Vagrant.configure("2") do |config|
-    config.vm.box = {% if boxname %} "{{ boxname }}" {% else %} "generic/rocky8" {% endif %}  
+    config.vm.box = {% if boxname is none  %} "generic/rocky8" {% else %} "{{ boxname }}" {% endif %}  
     config.vm.box_version = "4.3.12"
     config.vm.box_check_update = false
-    {% if hostname %}
-      config.vm.hostname = "{{ hostname }}" 
-    {% endif %}
+    {% if hostname is not none  %} config.vm.hostname = "{{ hostname }}" {% endif %}
     config.vm.synced_folder ".", "/vagrant", disabled: false
     config.vbguest.auto_update = false
-    
-    config.ssh.insert_key = false
-    config.ssh.password = "Vagrant"
     
     config.vm.provider "virtualbox" do |vbox, override|
 	vbox.name = "TestVM"
