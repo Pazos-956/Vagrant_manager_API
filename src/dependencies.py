@@ -10,13 +10,6 @@ logging.basicConfig(filename="/vagrant/logs/api.log", encoding="utf-8", level=lo
 
 log_cm = vagrant.make_file_cm("/vagrant/logs/api.log")
 
-def check_dir(path) -> bool:
-    if os.path.isdir(path):
-        return True
-    else: return False
-
-
-
 @contextlib.contextmanager
 def vagrant_run(path):
     abspath = os.path.abspath(path)
@@ -40,7 +33,6 @@ class Temp_info(BaseModel):
     hostname: str 
     provider: str = "virtualbox"
 
-# Convertir en cm para cambiar de directorio?
 def load_template(path, temp_info):
     env = Environment(loader=FileSystemLoader("/vagrant/src/templates/"))
     template = env.get_template("vagrantfile.template")

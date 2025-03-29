@@ -26,3 +26,4 @@ app.include_router(vagrant.router)
 @app.get("/healthcheck")
 def checkhealth():
     return {"status": "ok"}
+

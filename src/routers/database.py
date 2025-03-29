@@ -14,7 +14,7 @@ class Vm(SQLModel, table=True):
 
 class Venv(SQLModel, table=True):
     env_id: int | None = Field(default=None, primary_key=True)
-    env_name: str = Field(index=True)
+    env_path: str = Field(index=True)
     host_id: int | None = Field(default = None, foreign_key="host.host_id")
 
 class Host(SQLModel, table=True):

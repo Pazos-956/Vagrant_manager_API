@@ -1,9 +1,11 @@
+from sqlalchemy.exc import StatementError
 import vagrant
 import os
+import shutil
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlmodel import select
-from ..dependencies import vagrant_run, load_template, Temp_info, log, check_dir
+from ..dependencies import vagrant_run, load_template, Temp_info
 from .database import Vm, Venv, Host, SessionDep
 
 router = APIRouter()
@@ -24,51 +26,27 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
     env_path = os.path.normpath(base_path+usr+"/"+body.env_name)
     usr_path = os.path.normpath(base_path+usr)
 
-    if not check_dir(usr_path):
+    if not os.path.isdir(usr_path):
         raise HTTPException(status_code=404, detail={
             "message": "The user does not exist.",
             "user": usr
             }
         )
-    if check_dir(env_path):
+    if os.path.isdir(env_path):
         raise HTTPException(status_code=400, detail={
             "message": "The environment already exists.",
             "env": body.env_name
             }
         )
+    validate_template_info(body.temp_info)
     
-    if not body.temp_info.boxname in boxes:
-        raise HTTPException(status_code=404, detail={
-            "message": "This box is not allowed.",
-            "boxname": body.temp_info.boxname
-            }
-        )
-    if not body.temp_info.provider in providers:
-        raise HTTPException(status_code=404, detail={
-            "message": "This box is not allowed.",
-            "provider": body.temp_info.provider
-            }
-        )
-    if body.temp_info.cpu < 1:
-        raise HTTPException(status_code=404, detail={
-            "message": "The cpu must be greater than 1.",
-            "cpu": body.temp_info.cpu
-            }
-        )
-    if body.temp_info.mem < 1024:
-        raise HTTPException(status_code=404, detail={
-                "message": "The memory must be greater than 1024.",
-                "mem": body.temp_info.mem
-                }
-            )
-
     host = session.exec(select(Host)).first()
     if host == None:
         raise AttributeError("El host está vacio")
 
     if host.free_cpu >= body.temp_info.cpu and host.free_mem >= body.temp_info.mem and host.free_space >= 10:
         os.mkdir(env_path)
-        env = Venv(env_name = env_path, host_id = host.host_id)
+        env = Venv(env_path = env_path, host_id = host.host_id)
         session.add(env)
         session.commit()
         load_template(env_path, body.temp_info)
@@ -91,7 +69,6 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
             env_id = env.env_id
             )
     session.add(vm)
-
     host.free_cpu -= vm.cpu
     host.free_mem -= vm.mem
     host.free_space -= vm.space
@@ -99,41 +76,135 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
     session.commit()
     return body
 
-class Dir(BaseModel):
-    dirname: str
+class Status(BaseModel):
+    env_name: str
     machines: list[vagrant.Status] = []
 
-class Status(BaseModel):
-    dirs: list[Dir] = []
+class Global_status(BaseModel):
+    status_list: list[Status] = []
 
 
-@router.get("/{usr}/status")
-def get_status(usr, dirname: str | None = None) -> Status:
-    status = Status(dirs=[])
-    if dirname == None:
-        with os.scandir("/vagrant/"+usr) as entries:
-            for entry in entries:
-                if entry.is_dir():
-                    with vagrant_run(entry) as v:
-                        result = v.status()
-                        dire = Dir(dirname="", machines=[])
-                        dire.dirname = entry.name
-                        dire.machines = result
-                        status.dirs.append(dire)
-    else:
-        entry = "/vagrant/"+usr+"/"+dirname
-        if os.path.isdir(entry):
-            with vagrant_run(entry) as v:
-                result = v.status()
-                dire = Dir(dirname="", machines=[])
-                dire.dirname = dirname
-                dire.machines = result
-                status.dirs.append(dire)
+@router.get("/{usr}/{env_name}")
+def get_status(usr, env_name) -> Status:
+    env_path = os.path.normpath(base_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(base_path+usr)
+
+    if not os.path.isdir(usr_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The user does not exist.",
+            "user": usr
+            }
+        )
+    if not os.path.isdir(env_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The environment does not exist.",
+            "env": env_name
+            }
+        )
+
+    status = Status(env_name = env_name)
+    with vagrant_run(env_path) as v:
+        status.machines = v.status()
+
     return status
 
+@router.get("/{usr}/")
+def global_status(usr) -> Global_status:
+    usr_path = os.path.normpath(base_path+usr)
+
+    if not os.path.isdir(usr_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The user does not exist.",
+            "user": usr
+            }
+        )
+
+    status = Global_status()
+    with os.scandir(usr_path) as entries:
+        for entry in entries:
+            if not entry.is_dir():
+                continue
+            with vagrant_run(entry) as v:
+                env_status = Status(env_name = entry.name)
+                env_status.machines = v.status()
+                status.status_list.append(env_status)
+
+    return status
+
+@router.delete("/{usr}/{env_name}")
+def delete_env(usr, env_name, session: SessionDep):
+    env_path = os.path.normpath(base_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(base_path+usr)
+
+    if not os.path.isdir(usr_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The user does not exist.",
+            "user": usr
+            }
+        )
+    if not os.path.isdir(env_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The environment does not exist.",
+            "env": env_name
+            }
+        )
+
+    statement = select(Vm, Venv).where(Vm.env_id == Venv.env_id).where(Venv.env_path == env_path)
+    result = session.exec(statement).one()
+    host = session.exec(select(Host)).first()
+    if host == None:
+        raise AttributeError("El host está vacio")
+    vm = result[0]
+    env = result[1]
+
+    with vagrant_run(env_path) as v:
+        v.destroy()
+    
+    host.free_cpu += vm.cpu
+    host.free_mem += vm.mem
+    host.free_space += vm.space
+
+    session.add(host)
+    session.delete(vm)
+    shutil.rmtree(env_path)
+    session.delete(env)
+    session.commit()
+    return
+
+
+    
+
+    
 
 
 
+
+
+def validate_template_info(temp_info):
+    if not temp_info.boxname in boxes:
+        raise HTTPException(status_code=404, detail={
+            "message": "This box is not allowed.",
+            "boxname": temp_info.boxname
+            }
+        )
+    if not temp_info.provider in providers:
+        raise HTTPException(status_code=404, detail={
+            "message": "This box is not allowed.",
+            "provider": temp_info.provider
+            }
+        )
+    if temp_info.cpu < 1:
+        raise HTTPException(status_code=404, detail={
+            "message": "The cpu must be greater than 1.",
+            "cpu": temp_info.cpu
+            }
+        )
+    if temp_info.mem < 1024:
+        raise HTTPException(status_code=404, detail={
+                "message": "The memory must be greater than 1024.",
+                "mem": temp_info.mem
+                }
+            )
 
 
 
