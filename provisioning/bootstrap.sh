@@ -24,6 +24,12 @@ sudo apt -y update && sudo apt install -y vagrant
 sudo su vagrant vagrant plugin install vagrant-hostmanager
 sudo su vagrant vagrant plugin install vagrant-vbguest
 sudo su vagrant vagrant plugin install vagrant-libvirt
+sudo su vagrant vagrant plugin install fog-libvirt
+
+
+# Añade a vagrant al grupo libvirt para poder usarlo como provider
+usermod -aG libvirt vagrant
+newgrp libvirt
 
 # Cambio variable de entorno
 if [[ ! $(grep "TERM=xterm" ".profile") ]]; then
