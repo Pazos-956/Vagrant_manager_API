@@ -5,20 +5,28 @@ import shutil
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlmodel import select
-from ..dependencies import vagrant_run, load_template, Temp_info
+from ..dependencies import vagrant_run, load_template, Vagr_info
 from .database import Vm, Venv, Host, SessionDep
 
 router = APIRouter()
 
-base_path = "/home/vagrant/users/"
-boxes = ["ubuntu/jammy64", "generic/rocky8", "opensuse/Leap-15.6.x86_64"]
-providers = ["virtualbox", "libvirt", "vmware_desktop"]
+base_path = "/mnt/users/"
+ubuntu = {"providers": ["virtualbox"], "space": 40}
+hashicorp = {"providers": ["virtualbox", "libvirt", "vmware_desktop"], "space": 80}
+centos = {"providers": ["virtualbox", "libvirt", "vmware_desktop"], "space": 40}
+
+boxes = {
+        "ubuntu/jammy64": ubuntu,
+        "hashicorp/precise64": hashicorp,
+        "centos/7": centos
+        }
+
 
 # Para validar un objeto para la DB, usar Host.model_validate(host)
 
 class Create_env(BaseModel):
     env_name: str
-    temp_info: Temp_info
+    vagr_info: Vagr_info
 
 @router.post("/{usr}/create_env")
 def create_env(usr: str, body: Create_env, session: SessionDep):
@@ -29,6 +37,7 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
     if not os.path.isdir(usr_path):
         raise HTTPException(status_code=404, detail={
             "message": "The user does not exist.",
+
             "user": usr
             }
         )
@@ -38,20 +47,22 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
             "env": body.env_name
             }
         )
-    validate_template_info(body.temp_info)
+    validate_vagrant_info(body.vagr_info)
     
     host = session.exec(select(Host)).first()
     if host == None:
         raise AttributeError("El host está vacio")
 
-    if host.free_cpu >= body.temp_info.cpu and host.free_mem >= body.temp_info.mem and host.free_space >= 10:
+    if (host.free_cpu >= body.vagr_info.cpu
+        and host.free_mem >= body.vagr_info.mem
+        and host.free_space >= boxes[body.vagr_info.boxname]["space"]):
         os.mkdir(env_path)
-        env = Venv(env_path = env_path, host_id = host.host_id)
+        load_template(env_path, body.vagr_info)
+        with vagrant_run(env_path) as v:
+            v.up(provider=body.vagr_info.provider)
+            env = Venv(env_path = env_path, host_id = host.host_id)
         session.add(env)
         session.commit()
-        load_template(env_path, body.temp_info)
-        with vagrant_run(env_path) as v:
-            v.up()
     else:
         raise HTTPException(status_code=400, detail={
             "message": "There are not enough resources availables.",
@@ -62,10 +73,10 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
         )
     
     vm = Vm(
-            vm_name = body.temp_info.hostname,
-            cpu = body.temp_info.cpu,
-            mem = body.temp_info.mem,
-            space = 7,
+            vm_name = body.vagr_info.hostname,
+            cpu = body.vagr_info.cpu,
+            mem = body.vagr_info.mem,
+            space = boxes[body.vagr_info.boxname]["space"],
             env_id = env.env_id
             )
     session.add(vm)
@@ -171,40 +182,31 @@ def delete_env(usr, env_name, session: SessionDep):
     session.commit()
     return
 
-
-    
-
-    
-
-
-
-
-
-def validate_template_info(temp_info):
-    if not temp_info.boxname in boxes:
+def validate_vagrant_info(vagr_info):
+    if not vagr_info.boxname in boxes:
         raise HTTPException(status_code=404, detail={
             "message": "This box is not allowed.",
-            "boxname": temp_info.boxname
+            "boxname": vagr_info.boxname
             }
         )
-    if not temp_info.provider in providers:
+    if not vagr_info.provider in boxes[vagr_info.boxname]["providers"]:
         raise HTTPException(status_code=404, detail={
             "message": "This box is not allowed.",
-            "provider": temp_info.provider
+            "provider": vagr_info.provider
             }
         )
-    if temp_info.cpu < 1:
+    if vagr_info.cpu < 1:
         raise HTTPException(status_code=404, detail={
             "message": "The cpu must be greater than 1.",
-            "cpu": temp_info.cpu
+            "cpu": vagr_info.cpu
             }
         )
-    if temp_info.mem < 1024:
+    if vagr_info.mem < 1024:
         raise HTTPException(status_code=404, detail={
                 "message": "The memory must be greater than 1024.",
-                "mem": temp_info.mem
+                "mem": vagr_info.mem
                 }
-            )
+        )
 
 
 

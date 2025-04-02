@@ -5,10 +5,9 @@ MEM = {% if mem is none %} "1024" {% else %} "{{ mem }}" {% endif %}
 
 Vagrant.configure("2") do |config|
     config.vm.box = "{{ boxname }}"  
-    config.vm.box_version = "4.3.12"
     config.vm.box_check_update = false
     config.vm.hostname = "{{ hostname }}"
-    config.vm.synced_folder ".", "/vagrant", disabled: false
+    config.vm.synced_folder ".", "/vagrant", disabled: true
     config.vbguest.auto_update = false
     
     config.vm.provider "virtualbox" do |vbox, override|

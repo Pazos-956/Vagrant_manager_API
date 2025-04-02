@@ -15,7 +15,7 @@ sudo apt-get -y update
 sudo apt-get -y install virtualbox-7.1
 
 # Instalar KVM
-sudo apt-get -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu qemu-kvm libvirt-daemon-system
+sudo apt-get -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu qemu-kvm libvirt-daemon-system libvirt-dev
 
 # Instalar Vagrant ultima version y plugins
 wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
@@ -23,6 +23,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashi
 sudo apt -y update && sudo apt install -y vagrant
 sudo su vagrant vagrant plugin install vagrant-hostmanager
 sudo su vagrant vagrant plugin install vagrant-vbguest
+sudo su vagrant vagrant plugin install vagrant-libvirt
 
 # Cambio variable de entorno
 if [[ ! $(grep "TERM=xterm" ".profile") ]]; then
@@ -39,3 +40,12 @@ sudo systemctl start networkd-dispatcher.service unattended-upgrades.service
 
 mkdir /home/vagrant/users
 chown vagrant:vagrant /home/vagrant/users
+
+mkfs.ext4 /dev/sda
+mkdir /mnt/users
+mount /dev/sda /mnt/users
+mkdir /mnt/users/usertest
+chown vagrant:vagrant /mnt/users
+chown vagrant:vagrant /mnt/users/usertest
+
+

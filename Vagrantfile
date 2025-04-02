@@ -27,11 +27,26 @@ Vagrant.configure("2") do |config|
   config.vm.network "forwarded_port", guest: 8000, host: 8000
 
   config.vm.provider "virtualbox" do |vbox,  override|
-    vbox.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
-    vbox.name = "TFG-VM-API"
-    vbox.cpus = CPU
-    vbox.memory = MEM
-    vbox.gui = false
+      vbox.customize ['modifyvm', :id, '--nested-hw-virt', 'on']
+      vbox.name = "TFG-VM-API"
+      vbox.cpus = CPU
+      vbox.memory = MEM
+      vbox.gui = false
+
+      sasController = "SAS Controller"
+      diskFile = "VMdisk-SAS.vmdk"
+      unless File.exist?(diskFile)
+          vbox.customize ["createmedium", "disk", "--filename", diskFile, "--format", "VMDK", "--size",60 * 2048]
+      end
+
+      # Add storage SAS controller only when the VM is provisioned for the first time
+      unless File.exist?(".vagrant/machines/default/virtualbox/action_provision")
+          vbox.customize ["storagectl", :id, "--name", sasController, "--add", "sas", "--portcount", 1]
+      end
+
+      # Attach the virtual disk into the storage SAS controller
+      vbox.customize ["storageattach", :id, "--storagectl", sasController, "--port", 1, "--device", 0, "--type", "hdd", "--medium", diskFile] 
+ 
   end
   config.vm.provision "global", type: "shell", run: "once", path: "provisioning/bootstrap.sh"
 end

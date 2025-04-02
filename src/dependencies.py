@@ -1,4 +1,5 @@
 import contextlib
+from fastapi import HTTPException
 import vagrant
 import os
 import logging
@@ -23,13 +24,16 @@ def vagrant_run(path):
         yield v
     except Exception as err:
         log.exception(err.args)
-        raise
+        raise HTTPException(status_code=400, detail={
+                "message": "Error en la ejecución de Vagrant.",
+                }
+        )
 
 
-class Temp_info(BaseModel):
+class Vagr_info(BaseModel):
     cpu: int = 1
     mem: int = 1024
-    boxname: str = "generic/rocky8"
+    boxname: str = "ubuntu/jammy64"
     hostname: str 
     provider: str = "virtualbox"
 
