@@ -2,3 +2,7 @@
 **/.vagrant
 **/db.db
 **/logs/**
+**/VMdisk-SAS.vmdk
+VMware*
+vagrant-vmware-utility*
+

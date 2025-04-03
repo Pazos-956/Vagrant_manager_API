@@ -17,14 +17,21 @@ sudo apt-get -y install virtualbox-7.1
 # Instalar KVM
 sudo apt-get -y install bridge-utils cpu-checker libvirt-clients libvirt-daemon qemu qemu-kvm libvirt-daemon-system libvirt-dev
 
+#Install VMware
+chmod a+x /vagrant/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
+/vagrant/VMware-Workstation-Full-17.6.3-24583834.x86_64.bundle
+dpkg -i /vagrant/vagrant-vmware-utility_1.0.23-1_amd64.deb
+
 # Instalar Vagrant ultima version y plugins
 wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
 sudo apt -y update && sudo apt install -y vagrant
 sudo su vagrant vagrant plugin install vagrant-hostmanager
 sudo su vagrant vagrant plugin install vagrant-vbguest
+sudo su vagrant vagrant plugin install vagrant-vmware-desktop
 sudo su vagrant vagrant plugin install vagrant-libvirt
 sudo su vagrant vagrant plugin install fog-libvirt
+# No entiendo por que hay que usar fog
 
 
 # Añade a vagrant al grupo libvirt para poder usarlo como provider

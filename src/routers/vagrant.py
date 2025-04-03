@@ -182,6 +182,51 @@ def delete_env(usr, env_name, session: SessionDep):
     session.commit()
     return
 
+@router.put("/{usr}/{env_name}/up")
+def vagrant_up(usr, env_name):
+    env_path = os.path.normpath(base_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(base_path+usr)
+
+    if not os.path.isdir(usr_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The user does not exist.",
+            "user": usr
+            }
+        )
+    if not os.path.isdir(env_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The environment does not exist.",
+            "env": env_name
+            }
+        )
+
+    with vagrant_run(env_path) as v:
+        v.up()
+    return
+
+    
+@router.put("/{usr}/{env_name}/halt")
+def vagrant_halt(usr, env_name):
+    env_path = os.path.normpath(base_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(base_path+usr)
+
+    if not os.path.isdir(usr_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The user does not exist.",
+            "user": usr
+            }
+        )
+    if not os.path.isdir(env_path):
+        raise HTTPException(status_code=404, detail={
+            "message": "The environment does not exist.",
+            "env": env_name
+            }
+        )
+
+    with vagrant_run(env_path) as v:
+        v.halt()
+    return
+
 def validate_vagrant_info(vagr_info):
     if not vagr_info.boxname in boxes:
         raise HTTPException(status_code=404, detail={
