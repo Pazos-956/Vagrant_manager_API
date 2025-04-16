@@ -13,18 +13,18 @@ Vagrant.configure("2") do |config|
     config.vm.network "public_network", :dev => "enp0s8"
     
     config.vm.provider "virtualbox" do |vbox, override|
-	vbox.name = "{{ hostname }}"
-	vbox.cpus = CPU
-	vbox.memory = MEM
-	vbox.gui = false
-        vbox.linked_clone = false
+      vbox.name = "{{ hostname }}"
+      vbox.cpus = CPU
+      vbox.memory = MEM
+      vbox.gui = false
+      vbox.linked_clone = false
     end
 
     config.vm.provider "libvirt" do |kvm, override|
-	kvm.title = "{{ hostname }}"
-	kvm.cpus = CPU
-	kvm.memory = MEM
-	kvm.cputopology :sockets => '1', :cores => CPU, :threads => '1'
+      kvm.title = "{{ hostname }}"
+      kvm.cpus = CPU
+      kvm.memory = MEM
+      kvm.cputopology :sockets => '1', :cores => CPU, :threads => '1'
     end
 
   config.vm.provider "vmware_desktop" do |vmw, override|    
