@@ -3,13 +3,20 @@ from fastapi import HTTPException
 import vagrant
 import os
 import logging
-from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+load_dotenv()
+
+log_file = os.getenv("LOG_FILE")
+if log_file is None:
+    raise RuntimeError("La variable de entorno LOG_FILE no se ha cargado.")
+
 
 log = logging.getLogger(__name__)
-logging.basicConfig(filename="/vagrant/logs/api.log", encoding="utf-8", level=logging.DEBUG)
+logging.basicConfig(filename=log_file, encoding="utf-8", level=logging.DEBUG)
 
-log_cm = vagrant.make_file_cm("/vagrant/logs/api.log")
+log_cm = vagrant.make_file_cm(log_file)
 
 @contextlib.contextmanager
 def vagrant_run(path):
@@ -30,18 +37,3 @@ def vagrant_run(path):
         )
 
 
-class Vagr_info(BaseModel):
-    cpu: int = 1
-    mem: int = 1024
-    boxname: str = "ubuntu/jammy64"
-    hostname: str 
-    provider: str = "virtualbox"
-
-def load_template(path, temp_info):
-    env = Environment(loader=FileSystemLoader("/vagrant/src/templates/"))
-    template = env.get_template("vagrantfile.template")
-    contenido = template.render(temp_info)
-
-    vfile = os.path.abspath(path+"/Vagrantfile")
-    with open(vfile, "w") as file:
-        file.write(contenido)

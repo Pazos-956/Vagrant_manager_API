@@ -2,11 +2,14 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlmodel import Field, SQLModel, create_engine, Session
-
 from .routers import vagrant, database
 
+
+DB = os.getenv("DATABASE")
+assert DB is not None
+
 # fastapi dev main.py --host 0.0.0.0
-if not os.path.exists("/vagrant/src/db.db"):
+if not os.path.exists(DB):
     SQLModel.metadata.create_all(database.engine)
     host = database.Host(
             cpu_total = 3,

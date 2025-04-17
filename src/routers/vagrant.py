@@ -1,28 +1,35 @@
-from sqlalchemy.exc import StatementError
 import vagrant
 import os
 import shutil
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlmodel import select
-from ..dependencies import vagrant_run, load_template, Vagr_info
+from jinja2 import Environment, FileSystemLoader
+from ..dependencies import vagrant_run
 from .database import Vm, Venv, Host, SessionDep
 
 router = APIRouter()
 
-base_path = "/mnt/users/"
-ubuntu = {"providers": ["virtualbox"], "space": 40}
-hashicorp = {"providers": ["virtualbox", "libvirt", "vmware_desktop"], "space": 80}
-centos = {"providers": ["virtualbox", "libvirt", "vmware_desktop"], "space": 40}
+base_path = os.getenv("USERS_PATH")
+if base_path is None:
+    raise RuntimeError("La variable de entorno USERS_PATH no se ha cargado.")
+
+temp_dir = os.getenv("TEMP_DIR")
+if temp_dir is None:
+    raise RuntimeError("La variable de entorno TEMP_DIR no se ha cargado.")
 
 boxes = {
-        "ubuntu/jammy64": ubuntu,
-        "hashicorp/precise64": hashicorp,
-        "centos/7": centos
+        "ubuntu/jammy64": {"providers": ["virtualbox"], "space": 40},
+        "hashicorp/precise64": {"providers": ["virtualbox", "libvirt", "vmware_desktop"], "space": 80},
+        "centos/7": {"providers": ["virtualbox", "libvirt", "vmware_desktop"], "space": 40}
         }
 
-
-# Para validar un objeto para la DB, usar Host.model_validate(host)
+class Vagr_info(BaseModel):
+    cpu: int = 1
+    mem: int = 1024
+    boxname: str = "ubuntu/jammy64"
+    hostname: str 
+    provider: str = "virtualbox"
 
 class Create_env(BaseModel):
     env_name: str
@@ -253,9 +260,11 @@ def validate_vagrant_info(vagr_info):
                 }
         )
 
+def load_template(path, temp_info):
+    env = Environment(loader=FileSystemLoader(temp_dir))
+    template = env.get_template("vagrantfile.template")
+    contenido = template.render(temp_info)
 
-
-
-
-
-
+    vfile = os.path.abspath(path+"/Vagrantfile")
+    with open(vfile, "w") as file:
+        file.write(contenido)

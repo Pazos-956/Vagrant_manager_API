@@ -3,6 +3,15 @@
 CPU = {% if cpu is none %} "1" {% else %} "{{ cpu }}" {% endif %} 
 MEM = {% if mem is none %} "1024" {% else %} "{{ mem }}" {% endif %}  
 
+$script = <<-SCRIPT
+useradd -m {{ hostname }}
+echo '{{ hostname }}:{{ hostname }}' | chpasswd
+passwd -e {{ hostname }}
+echo "Match User {{ hostname }}\n\tPasswordAuthentication yes" >> /etc/ssh/sshd_config
+systemctl restart sshd
+usermod -a -G wheel {{ hostname }}
+SCRIPT
+
 Vagrant.configure("2") do |config|
     config.vm.box = "{{ boxname }}"  
     config.vm.box_check_update = false
@@ -10,8 +19,7 @@ Vagrant.configure("2") do |config|
     config.vm.synced_folder ".", "/vagrant", disabled: true
     config.vbguest.auto_update = false
     config.vm.network "private_network", type: "dhcp"
-    config.vm.network "public_network", :dev => "enp0s8"
-    
+
     config.vm.provider "virtualbox" do |vbox, override|
       vbox.name = "{{ hostname }}"
       vbox.cpus = CPU
@@ -36,6 +44,6 @@ Vagrant.configure("2") do |config|
       vmw.linked_clone = false
   end
 
-    #config.vm.provision "global", type: "shell", run: "once", path: "provisioning/bootstrap.sh"
+  config.vm.provision "shell", inline: $script
 end
 
