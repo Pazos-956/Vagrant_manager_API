@@ -31,7 +31,7 @@ def vagrant_run(path):
     except Exception as err:
         log.exception(err.args)
         raise HTTPException(status_code=400, detail={
-                "message": "Error en la ejecución de Vagrant.",
+            "message": f"El comando 'vagrant {err.args[1][1]} {err.args[1][2]}' ha devuelto estado de salida {err.args[0]}.",
                 }
         )
 

@@ -42,7 +42,6 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
     if not os.path.isdir(usr_path):
         raise HTTPException(status_code=404, detail={
             "message": "The user does not exist.",
-
             "user": usr
             }
         )

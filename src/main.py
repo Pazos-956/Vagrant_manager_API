@@ -1,4 +1,5 @@
 import os
+import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
 from sqlmodel import SQLModel, Session
@@ -31,16 +32,15 @@ api_key = os.getenv("API_KEY")
 if api_key is None:
     raise RuntimeError("La variable de entorno api_key no se ha cargado.")
 
-# @app.exception_handler(HTTPException)
-# async def http_exception_handler(request, err):
-#     return JSONResponse(status_code=err.status_code,
-#                         content={
-#                             "status": err.status_code,
-#                             "error": err.detail["error"],
-#                             "message": err.detail["message"],
-#                             "path": request.path_params
-#
-#                         })
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, err):
+    return JSONResponse(status_code=err.status_code,
+                        content={
+                            "status": err.status_code,
+                            "message": err.detail["message"],
+                            "path": request.url.path,
+                            "datetime": datetime.datetime.now().strftime("%x %X.%f")
+                        })
 
 @app.middleware("http")
 async def check_token(request: Request, call_next):
