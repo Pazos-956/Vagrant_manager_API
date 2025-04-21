@@ -1,7 +1,8 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException, status
 from sqlmodel import SQLModel, Session
+from fastapi.responses import JSONResponse
 from .routers import vagrant
 from .database import database
 
@@ -26,8 +27,39 @@ if not os.path.exists(DB):
 
 app = FastAPI()
 
-app.include_router(vagrant.router)
+api_key = os.getenv("API_KEY")
+if api_key is None:
+    raise RuntimeError("La variable de entorno api_key no se ha cargado.")
 
+# @app.exception_handler(HTTPException)
+# async def http_exception_handler(request, err):
+#     return JSONResponse(status_code=err.status_code,
+#                         content={
+#                             "status": err.status_code,
+#                             "error": err.detail["error"],
+#                             "message": err.detail["message"],
+#                             "path": request.path_params
+#
+#                         })
+
+@app.middleware("http")
+async def check_token(request: Request, call_next):
+    if "X-API-Key" in request.headers:
+        token = request.headers["X-API-Key"]
+        if token == api_key:
+            response = await call_next(request)
+            return response
+        else:
+            raise HTTPException(status_code=403, detail={
+                "message": "La API-key es inválida.",
+                }
+            )
+    else:
+        return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"message": "No se ha enviado la API-key."})
+
+app.include_router(vagrant.router)
 
 @app.get("/healthcheck")
 def checkhealth():
