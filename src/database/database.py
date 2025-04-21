@@ -1,8 +1,7 @@
+import os
 from typing import Annotated
-from fastapi import APIRouter, Depends
+from fastapi import Depends
 from sqlmodel import Field, SQLModel, create_engine, Session
-
-router = APIRouter()
 
 class Vm(SQLModel, table=True):
     vm_id: int | None = Field(default=None, primary_key=True)
@@ -26,8 +25,11 @@ class Host(SQLModel, table=True):
     free_mem: int
     free_space: int
 
-sqlite_file_name = "db.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
+DB = os.getenv("DATABASE")
+if DB is None:
+    raise RuntimeError("La variable de entorno DATABASE no se ha cargado.")
+
+sqlite_url = f"sqlite:///{DB}"
 
 engine = create_engine(sqlite_url, echo=True)
 

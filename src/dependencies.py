@@ -3,7 +3,6 @@ from fastapi import HTTPException
 import vagrant
 import os
 import logging
-from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -35,5 +34,16 @@ def vagrant_run(path):
                 "message": "Error en la ejecución de Vagrant.",
                 }
         )
+
+
+class Response():
+    hostName: str
+    user: str
+    port: int
+
+def parse_response(conf):
+    response = Response()
+    response.hostName = conf["HostName"]
+    response.port = conf["Port"]
 
 

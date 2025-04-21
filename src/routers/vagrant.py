@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlmodel import select
 from jinja2 import Environment, FileSystemLoader
 from ..dependencies import vagrant_run
-from .database import Vm, Venv, Host, SessionDep
+from ..database.database import Vm, Venv, Host, SessionDep
 
 router = APIRouter()
 
@@ -25,21 +25,19 @@ boxes = {
         }
 
 class Vagr_info(BaseModel):
+    env_name: str
     cpu: int = 1
     mem: int = 1024
     boxname: str = "ubuntu/jammy64"
     hostname: str 
     provider: str = "virtualbox"
 
-class Create_env(BaseModel):
-    env_name: str
-    vagr_info: Vagr_info
-
 @router.post("/{usr}/create_env")
-def create_env(usr: str, body: Create_env, session: SessionDep):
+def create_env(usr: str, body: Vagr_info, session: SessionDep):
     body.env_name = os.path.basename(body.env_name) # deletes paths for unwanted subdirectories
     env_path = os.path.normpath(base_path+usr+"/"+body.env_name)
     usr_path = os.path.normpath(base_path+usr)
+    response: Response
 
     if not os.path.isdir(usr_path):
         raise HTTPException(status_code=404, detail={
@@ -54,20 +52,21 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
             "env": body.env_name
             }
         )
-    validate_vagrant_info(body.vagr_info)
+    validate_vagrant_info(body)
     
     host = session.exec(select(Host)).first()
     if host == None:
         raise AttributeError("El host está vacio")
 
-    if (host.free_cpu >= body.vagr_info.cpu
-        and host.free_mem >= body.vagr_info.mem
-        and host.free_space >= boxes[body.vagr_info.boxname]["space"]):
+    if (host.free_cpu >= body.cpu
+        and host.free_mem >= body.mem
+        and host.free_space >= boxes[body.boxname]["space"]):
         os.mkdir(env_path)
-        load_template(env_path, body.vagr_info)
+        load_template(env_path, body)
         with vagrant_run(env_path) as v:
-            v.up(provider=body.vagr_info.provider)
+            v.up(provider=body.provider)
             env = Venv(env_path = env_path, host_id = host.host_id)
+            response = create_response(v.conf())
         session.add(env)
         session.commit()
     else:
@@ -80,10 +79,10 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
         )
     
     vm = Vm(
-            vm_name = body.vagr_info.hostname,
-            cpu = body.vagr_info.cpu,
-            mem = body.vagr_info.mem,
-            space = boxes[body.vagr_info.boxname]["space"],
+            vm_name = body.hostname,
+            cpu = body.cpu,
+            mem = body.mem,
+            space = boxes[body.boxname]["space"],
             env_id = env.env_id
             )
     session.add(vm)
@@ -92,7 +91,7 @@ def create_env(usr: str, body: Create_env, session: SessionDep):
     host.free_space -= vm.space
     session.add(host)
     session.commit()
-    return body
+    return response
 
 class Status(BaseModel):
     env_name: str
@@ -193,6 +192,7 @@ def delete_env(usr, env_name, session: SessionDep):
 def vagrant_up(usr, env_name):
     env_path = os.path.normpath(base_path+usr+"/"+env_name)
     usr_path = os.path.normpath(base_path+usr)
+    response: Response
 
     if not os.path.isdir(usr_path):
         raise HTTPException(status_code=404, detail={
@@ -209,7 +209,8 @@ def vagrant_up(usr, env_name):
 
     with vagrant_run(env_path) as v:
         v.up()
-    return
+        response = create_response(v.conf())
+    return response
 
     
 @router.put("/{usr}/{env_name}/halt")
@@ -260,11 +261,25 @@ def validate_vagrant_info(vagr_info):
                 }
         )
 
-def load_template(path, temp_info):
+def load_template(path, body):
     env = Environment(loader=FileSystemLoader(temp_dir))
     template = env.get_template("vagrantfile.template")
-    contenido = template.render(temp_info)
+    contenido = template.render(body)
 
     vfile = os.path.abspath(path+"/Vagrantfile")
     with open(vfile, "w") as file:
         file.write(contenido)
+
+class Response():
+    hostName: str
+    user: str
+    port: int
+
+def create_response(conf):
+    response = Response()
+    response.hostName = conf["HostName"]
+    response.user = conf["Host"]
+    response.port = conf["Port"]
+    return response
+
+
