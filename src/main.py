@@ -1,5 +1,6 @@
 import os
 import datetime
+from time import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
 from sqlmodel import SQLModel, Session
@@ -8,9 +9,20 @@ from .routers import vagrant
 from .database import database
 
 
+api_key = os.getenv("API_KEY")
+if api_key is None:
+    raise RuntimeError("La variable de entorno api_key no se ha cargado.")
+
 DB = os.getenv("DATABASE")
 if DB is None:
     raise RuntimeError("La variable de entorno DATABASE no se ha cargado.")
+
+auth_ips = ["127.0.0.1"]
+request_counts = {}
+RATE_LIMIT = 2
+TIME_WINDOW = 60
+
+app = FastAPI()
 
 # fastapi dev main.py --host 0.0.0.0
 if not os.path.exists(DB):
@@ -26,11 +38,6 @@ if not os.path.exists(DB):
         session.add(host)
         session.commit()
 
-app = FastAPI()
-
-api_key = os.getenv("API_KEY")
-if api_key is None:
-    raise RuntimeError("La variable de entorno api_key no se ha cargado.")
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, err):
@@ -43,21 +50,66 @@ async def http_exception_handler(request, err):
                         })
 
 @app.middleware("http")
-async def check_token(request: Request, call_next):
+async def request_limit_middleware(request: Request, call_next):
+    assert request.client is not None
+
+    if request.client.host not in request_counts:
+        request_counts.update({request.client.host:(time(), 1)})
+    else:
+        timestamp, count = request_counts[request.client.host]
+
+        if (time() - timestamp) > TIME_WINDOW:
+            count = 0
+            timestamp = time()
+
+        count +=1
+        if count > RATE_LIMIT:
+            time_left = TIME_WINDOW-(time()-timestamp)
+            return JSONResponse(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                                content={
+                                    "status": status.HTTP_429_TOO_MANY_REQUESTS,
+                                    "message": f"Se ha excedido el número de peticiones permitidas, inténtelo en {round(time_left,2)} segundos.",
+                                    "path": request.url.path,
+                                    "datetime": datetime.datetime.now().strftime("%x %X.%f")
+                                    })
+
+        request_counts.update({request.client.host:(timestamp,count)})
+
+    response = await call_next(request)
+    return response
+
+@app.middleware("http")
+async def check_authorization(request: Request, call_next):
+    assert request.client is not None
+    if request.client.host not in auth_ips:
+            return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
+                content={
+                    "status": status.HTTP_403_FORBIDDEN,
+                    "message": "Su IP no está autorizada para realizar peticiones a la API.",
+                    "path": request.url.path,
+                    "datetime": datetime.datetime.now().strftime("%x %X.%f")
+            })
     if "X-API-Key" in request.headers:
         token = request.headers["X-API-Key"]
         if token == api_key:
             response = await call_next(request)
             return response
         else:
-            raise HTTPException(status_code=403, detail={
-                "message": "La API-key es inválida.",
-                }
-            )
+            return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
+                content={
+                    "status": status.HTTP_403_FORBIDDEN,
+                    "message": "La API-key proporcionada es inválida.",
+                    "path": request.url.path,
+                    "datetime": datetime.datetime.now().strftime("%x %X.%f")
+            })
     else:
-        return JSONResponse(
-                status_code=status.HTTP_403_FORBIDDEN,
-                content={"message": "No se ha enviado la API-key."})
+        return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
+            content={
+                "status": status.HTTP_403_FORBIDDEN,
+                "message": "No se ha proporcionado la API-key, añada la cabecera X-API-Key.",
+                "path": request.url.path,
+                "datetime": datetime.datetime.now().strftime("%x %X.%f")
+        })
 
 app.include_router(vagrant.router)
 

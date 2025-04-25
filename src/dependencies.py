@@ -2,6 +2,7 @@ import contextlib
 from fastapi import HTTPException
 import vagrant
 import os
+import shutil
 import logging
 from dotenv import load_dotenv
 
@@ -29,12 +30,13 @@ def vagrant_run(path):
     try:
         yield v
     except Exception as err:
+        v.destroy()
+        shutil.rmtree(path)
         log.exception(err.args)
         raise HTTPException(status_code=400, detail={
             "message": f"El comando 'vagrant {err.args[1][1]} {err.args[1][2]}' ha devuelto estado de salida {err.args[0]}.",
                 }
         )
-
 
 class Response():
     hostName: str
