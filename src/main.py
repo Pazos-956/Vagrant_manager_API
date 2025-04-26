@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
 from sqlmodel import SQLModel, Session
 from fastapi.responses import JSONResponse
-from .routers import vagrant
+from .routers import vagrant, users
 from .database import database
 
 
@@ -17,9 +17,9 @@ DB = os.getenv("DATABASE")
 if DB is None:
     raise RuntimeError("La variable de entorno DATABASE no se ha cargado.")
 
-auth_ips = ["127.0.0.1"]
+auth_ips = ["127.0.0.1","192.168.1.80"]
 request_counts = {}
-RATE_LIMIT = 2
+RATE_LIMIT = 10
 TIME_WINDOW = 60
 
 app = FastAPI()
@@ -44,9 +44,10 @@ async def http_exception_handler(request, err):
     return JSONResponse(status_code=err.status_code,
                         content={
                             "status": err.status_code,
-                            "message": err.detail["message"],
                             "path": request.url.path,
-                            "datetime": datetime.datetime.now().strftime("%x %X.%f")
+                            "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+                            "details": err.detail
+                            
                         })
 
 @app.middleware("http")
@@ -68,9 +69,11 @@ async def request_limit_middleware(request: Request, call_next):
             return JSONResponse(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                                 content={
                                     "status": status.HTTP_429_TOO_MANY_REQUESTS,
-                                    "message": f"Se ha excedido el número de peticiones permitidas, inténtelo en {round(time_left,2)} segundos.",
                                     "path": request.url.path,
-                                    "datetime": datetime.datetime.now().strftime("%x %X.%f")
+                                    "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+                                    "details": {
+                                        "message": f"Se ha excedido el número de peticiones permitidas, inténtelo en {round(time_left,2)} segundos.",
+                                    }
                                     })
 
         request_counts.update({request.client.host:(timestamp,count)})
@@ -85,9 +88,11 @@ async def check_authorization(request: Request, call_next):
             return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
                 content={
                     "status": status.HTTP_403_FORBIDDEN,
-                    "message": "Su IP no está autorizada para realizar peticiones a la API.",
                     "path": request.url.path,
-                    "datetime": datetime.datetime.now().strftime("%x %X.%f")
+                    "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+                    "details": {
+                        "message": "Su IP no está autorizada para realizar peticiones a la API.",
+                    }
             })
     if "X-API-Key" in request.headers:
         token = request.headers["X-API-Key"]
@@ -98,20 +103,25 @@ async def check_authorization(request: Request, call_next):
             return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
                 content={
                     "status": status.HTTP_403_FORBIDDEN,
-                    "message": "La API-key proporcionada es inválida.",
                     "path": request.url.path,
-                    "datetime": datetime.datetime.now().strftime("%x %X.%f")
+                    "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+                    "details":{
+                        "message": "La API-key proporcionada es inválida.",
+                    }
             })
     else:
         return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
             content={
                 "status": status.HTTP_403_FORBIDDEN,
-                "message": "No se ha proporcionado la API-key, añada la cabecera X-API-Key.",
                 "path": request.url.path,
-                "datetime": datetime.datetime.now().strftime("%x %X.%f")
+                "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+                "details":{
+                    "message": "No se ha proporcionado la API-key, añada la cabecera X-API-Key.",
+                }
         })
 
 app.include_router(vagrant.router)
+app.include_router(users.router)
 
 @app.get("/healthcheck")
 def checkhealth():

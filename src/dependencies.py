@@ -1,5 +1,5 @@
 import contextlib
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 import vagrant
 import os
 import shutil
@@ -33,8 +33,9 @@ def vagrant_run(path):
         v.destroy()
         shutil.rmtree(path)
         log.exception(err.args)
-        raise HTTPException(status_code=400, detail={
-            "message": f"El comando 'vagrant {err.args[1][1]} {err.args[1][2]}' ha devuelto estado de salida {err.args[0]}.",
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
+            "message": "Ha ocurrido un error en Vagrant.",
+            #"message": f"El comando 'vagrant {err.args[1][1]} {err.args[1][2]}' ha devuelto un estado de salida {err.args[0]}.",
                 }
         )
 

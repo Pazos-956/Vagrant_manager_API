@@ -1,10 +1,12 @@
+from starlette.status import HTTP_204_NO_CONTENT
 import vagrant
 import os
 import shutil
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlmodel import select
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from ..dependencies import vagrant_run
 from ..database.database import Vm, Venv, Host, SessionDep
 
@@ -32,7 +34,7 @@ class Vagr_info(BaseModel):
     hostname: str 
     provider: str = "virtualbox"
 
-@router.post("/{usr}/create_env")
+@router.post("/{usr}/create_env", status_code=status.HTTP_201_CREATED)
 def create_env(usr: str, body: Vagr_info, session: SessionDep):
     body.env_name = os.path.basename(body.env_name) # deletes paths for unwanted subdirectories
     env_path = os.path.normpath(base_path+usr+"/"+body.env_name)
@@ -40,14 +42,14 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
     response: Response
 
     if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The user does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
             "user": usr
             }
         )
     if os.path.isdir(env_path):
-        raise HTTPException(status_code=400, detail={
-            "message": "The environment already exists.",
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "message": "El entorno ya existe.",
             "env": body.env_name
             }
         )
@@ -69,8 +71,8 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
         session.add(env)
         session.commit()
     else:
-        raise HTTPException(status_code=400, detail={
-            "message": "There are not enough resources availables.",
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
+            "message": "No hay suficientes recursos disponibles",
             "cpu": host.free_cpu,
             "mem": host.free_mem,
             "space": host.free_space,
@@ -92,75 +94,75 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
     session.commit()
     return response
 
-class Status(BaseModel):
+class State(BaseModel):
     env_name: str
     machines: list[vagrant.Status] = []
 
-class Global_status(BaseModel):
-    status_list: list[Status] = []
+class Global_state(BaseModel):
+    state_list: list[State] = []
 
 
 @router.get("/{usr}/{env_name}")
-def get_status(usr, env_name) -> Status:
+def get_state(usr, env_name) -> State:
     env_path = os.path.normpath(base_path+usr+"/"+env_name)
     usr_path = os.path.normpath(base_path+usr)
 
     if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The user does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
             "user": usr
             }
         )
     if not os.path.isdir(env_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The environment does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el entorno.",
             "env": env_name
             }
         )
 
-    status = Status(env_name = env_name)
+    state = State(env_name = env_name)
     with vagrant_run(env_path) as v:
-        status.machines = v.status()
+        state.machines = v.status()
 
-    return status
+    return state
 
 @router.get("/{usr}/")
-def global_status(usr) -> Global_status:
+def global_state(usr) -> Global_state:
     usr_path = os.path.normpath(base_path+usr)
 
     if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The user does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
             "user": usr
             }
         )
 
-    status = Global_status()
+    global_state = Global_state()
     with os.scandir(usr_path) as entries:
         for entry in entries:
             if not entry.is_dir():
                 continue
             with vagrant_run(entry) as v:
-                env_status = Status(env_name = entry.name)
-                env_status.machines = v.status()
-                status.status_list.append(env_status)
+                env_state = State(env_name = entry.name)
+                env_state.machines = v.status()
+                global_state.state_list.append(env_state)
 
-    return status
+    return global_state
 
-@router.delete("/{usr}/{env_name}")
+@router.delete("/{usr}/{env_name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_env(usr, env_name, session: SessionDep):
     env_path = os.path.normpath(base_path+usr+"/"+env_name)
     usr_path = os.path.normpath(base_path+usr)
 
     if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The user does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
             "user": usr
             }
         )
     if not os.path.isdir(env_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The environment does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el entorno.",
             "env": env_name
             }
         )
@@ -194,14 +196,14 @@ def vagrant_up(usr, env_name):
     response: Response
 
     if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The user does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
             "user": usr
             }
         )
     if not os.path.isdir(env_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The environment does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el entorno.",
             "env": env_name
             }
         )
@@ -212,20 +214,20 @@ def vagrant_up(usr, env_name):
     return response
 
     
-@router.put("/{usr}/{env_name}/halt")
+@router.put("/{usr}/{env_name}/halt", status_code=status.HTTP_204_NO_CONTENT)
 def vagrant_halt(usr, env_name):
     env_path = os.path.normpath(base_path+usr+"/"+env_name)
     usr_path = os.path.normpath(base_path+usr)
 
     if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The user does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
             "user": usr
             }
         )
     if not os.path.isdir(env_path):
-        raise HTTPException(status_code=404, detail={
-            "message": "The environment does not exist.",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el entorno.",
             "env": env_name
             }
         )
@@ -234,31 +236,30 @@ def vagrant_halt(usr, env_name):
         v.halt()
     return
 
+
 def validate_vagrant_info(vagr_info):
     if not vagr_info.boxname in boxes:
-        raise HTTPException(status_code=404, detail={
-            "message": "This box is not allowed.",
-            "boxname": vagr_info.boxname
-            }
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
+            "message": "El valor 'boxname' introducido no es válido.",
+            "invalid_boxname": vagr_info.boxname,
+            "available_boxnames": [ "ubunt/jammy64","hashicorp/precise64", "centos/7"]
+            })
     if not vagr_info.provider in boxes[vagr_info.boxname]["providers"]:
-        raise HTTPException(status_code=404, detail={
-            "message": "This box is not allowed.",
-            "provider": vagr_info.provider
-            }
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
+            "message": "El provider introducido no es válido para esta máquina.",
+            "invalid_provider": vagr_info.provider,
+            "available_providers": boxes[vagr_info.boxname]["providers"]
+            })
     if vagr_info.cpu < 1:
-        raise HTTPException(status_code=404, detail={
-            "message": "The cpu must be greater than 1.",
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
+            "message": "El valor de CPU introducido debe ser mayor que 1.",
             "cpu": vagr_info.cpu
-            }
-        )
+            })
     if vagr_info.mem < 1024:
-        raise HTTPException(status_code=404, detail={
-                "message": "The memory must be greater than 1024.",
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={
+                "message": "El valor de memoria introducido deve ser mayor que 1024.",
                 "mem": vagr_info.mem
-                }
-        )
+                })
 
 def load_template(path, body):
     env = Environment(loader=FileSystemLoader(temp_dir))
