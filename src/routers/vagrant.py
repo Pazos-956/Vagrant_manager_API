@@ -64,12 +64,26 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
         and host.free_space >= boxes[body.boxname]["space"]):
         os.mkdir(env_path)
         load_template(env_path, body)
-        with vagrant_run(env_path) as v:
-            v.up(provider=body.provider)
-            env = Venv(env_path = env_path, host_id = host.host_id)
-            response = create_response(v.conf())
+        env = Venv(env_path = env_path, host_id = host.host_id)
         session.add(env)
         session.commit()
+        vm = Vm(
+                vm_name = body.hostname,
+                cpu = body.cpu,
+                mem = body.mem,
+                space = boxes[body.boxname]["space"],
+                env_id = env.env_id
+                )
+        session.add(vm)
+        host.free_cpu -= vm.cpu
+        host.free_mem -= vm.mem
+        host.free_space -= vm.space
+        session.add(host)
+        session.commit()
+        with vagrant_run(env_path) as v:
+            v.up(provider=body.provider)
+            response = create_response(v.conf())
+    
     else:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
             "message": "No hay suficientes recursos disponibles",
@@ -78,20 +92,6 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
             "space": host.free_space,
             }
         )
-    
-    vm = Vm(
-            vm_name = body.hostname,
-            cpu = body.cpu,
-            mem = body.mem,
-            space = boxes[body.boxname]["space"],
-            env_id = env.env_id
-            )
-    session.add(vm)
-    host.free_cpu -= vm.cpu
-    host.free_mem -= vm.mem
-    host.free_space -= vm.space
-    session.add(host)
-    session.commit()
     return response
 
 class State(BaseModel):

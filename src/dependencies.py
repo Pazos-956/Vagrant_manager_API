@@ -1,12 +1,13 @@
 import contextlib
-from fastapi import HTTPException, status
 import vagrant
 import os
 import shutil
+import psutil
+import time
 import logging
-from dotenv import load_dotenv
-
-load_dotenv()
+from sqlmodel import select
+from .database.database import Vm, Venv, Host, get_session
+from fastapi import HTTPException, status
 
 log_file = os.getenv("LOG_FILE")
 if log_file is None:
@@ -30,8 +31,36 @@ def vagrant_run(path):
     try:
         yield v
     except Exception as err:
-        v.destroy()
-        shutil.rmtree(path)
+        pid = None
+        for proc in psutil.process_iter(["name", "pid"]):
+            if proc.info["name"] == "vagrant":
+                pid = proc.info["pid"]
+        while pid != None:
+            if psutil.pid_exists(pid):
+                time.sleep(3)
+            else:
+                pid = None
+        if "up" in err.args[1] and (len(err.args[1]) == 3):
+            
+            v.destroy()
+            shutil.rmtree(path)
+            with get_session() as session:
+                statement = select(Vm, Venv).where(Vm.env_id == Venv.env_id).where(Venv.env_path == path)
+                result = session.exec(statement).one()
+                host = session.exec(select(Host)).first()
+                if host == None:
+                    raise AttributeError("El host está vacio")
+                vm = result[0]
+                env = result[1]
+
+                host.free_cpu += vm.cpu
+                host.free_mem += vm.mem
+                host.free_space += vm.space
+
+                session.add(host)
+                session.delete(vm)
+                session.delete(env)
+                session.commit()
         log.exception(err.args)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
             "message": "Ha ocurrido un error en Vagrant.",

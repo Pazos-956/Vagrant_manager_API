@@ -2,6 +2,9 @@ import os
 from typing import Annotated
 from fastapi import Depends
 from sqlmodel import Field, SQLModel, create_engine, Session
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Vm(SQLModel, table=True):
     vm_id: int | None = Field(default=None, primary_key=True)
@@ -34,10 +37,13 @@ sqlite_url = f"sqlite:///{DB}"
 engine = create_engine(sqlite_url, echo=True)
 
 # Esto crea una sesión y la devuelve, para que al acabar la petición se libere automáticamente
-def get_session():
+def get_session_parameter():
     with Session(engine) as session:
         yield session
 
+def get_session():
+    return Session(engine)
+
 # Esto evita tener que crear el annotated y llamar al Depends en cada petición
 # Llama a get_session y devuelve su sesión, para usarla en cada petición de forma individual
-SessionDep = Annotated[Session, Depends(get_session)]
+SessionDep = Annotated[Session, Depends(get_session_parameter)]

@@ -7,7 +7,9 @@ from sqlmodel import SQLModel, Session
 from fastapi.responses import JSONResponse
 from .routers import vagrant, users
 from .database import database
+from dotenv import load_dotenv
 
+load_dotenv()
 
 api_key = os.getenv("API_KEY")
 if api_key is None:
@@ -34,7 +36,7 @@ if not os.path.exists(DB):
             free_cpu = 3,
             free_mem = 3072,
             free_space = 110)
-    with Session(database.engine) as session:
+    with database.get_session() as session:
         session.add(host)
         session.commit()
 
