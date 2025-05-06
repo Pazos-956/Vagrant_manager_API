@@ -10,12 +10,15 @@ from .database.database import Vm, Venv, Host, get_session
 from fastapi import HTTPException, status
 
 log_file = os.getenv("LOG_FILE")
-if log_file is None:
-    raise RuntimeError("La variable de entorno LOG_FILE no se ha cargado.")
 
+print("Esto es dependencies:  ")
+print(os.getcwd())
+print("\n")
 
 log = logging.getLogger(__name__)
-logging.basicConfig(filename=log_file, encoding="utf-8", level=logging.DEBUG)
+logging.basicConfig(
+        format="%(asctime)s - %(levelname)s: %(message)s",
+        filename=log_file, encoding="utf-8", level=logging.INFO)
 
 log_cm = vagrant.make_file_cm(log_file)
 
@@ -61,7 +64,6 @@ def vagrant_run(path):
                 session.delete(vm)
                 session.delete(env)
                 session.commit()
-        log.exception(err.args)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
             "message": "Ha ocurrido un error en Vagrant.",
             #"message": f"El comando 'vagrant {err.args[1][1]} {err.args[1][2]}' ha devuelto un estado de salida {err.args[0]}.",

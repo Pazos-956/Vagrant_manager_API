@@ -5,11 +5,10 @@ from fastapi.responses import JSONResponse
 router = APIRouter()
 
 base_path = os.getenv("USERS_PATH")
-if base_path is None:
-    raise RuntimeError("La variable de entorno USERS_PATH no se ha cargado.")
 
 @router.post("/users/create-user/{usr}")
 def create_user_dir(usr: str):
+    assert base_path
     usr_path = os.path.normpath(base_path+usr)
     if os.path.exists(usr_path):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
@@ -26,6 +25,7 @@ def create_user_dir(usr: str):
 
 @router.delete("/users/{usr}/delete",status_code=status.HTTP_204_NO_CONTENT)
 def remove_user_dir(usr: str):
+    assert base_path
     usr_path = os.path.normpath(base_path+usr)
     if not os.path.exists(usr_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={

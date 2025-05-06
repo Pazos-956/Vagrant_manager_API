@@ -5,21 +5,29 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
 from sqlmodel import SQLModel, Session
 from fastapi.responses import JSONResponse
-from .routers import vagrant, users
-from .database import database
 from dotenv import load_dotenv
 
 load_dotenv()
+from .routers import vagrant, users
+from .database import database
 
 api_key = os.getenv("API_KEY")
+log_file = os.getenv("LOG_FILE")
+DB = os.getenv("DATABASE")
+
 if api_key is None:
     raise RuntimeError("La variable de entorno api_key no se ha cargado.")
-
-DB = os.getenv("DATABASE")
+if log_file is None:
+    raise RuntimeError("La variable de entorno LOG_FILE no se ha cargado.")
 if DB is None:
     raise RuntimeError("La variable de entorno DATABASE no se ha cargado.")
+if os.getenv("TMPL_DIR") is None:
+    raise RuntimeError("La variable de entorno TMPL_DIR no se ha cargado.")
+if os.getenv("USERS_PATH") is None:
+    raise RuntimeError("La variable de entorno api_key no se ha cargado.")
 
-auth_ips = ["127.0.0.1","192.168.1.80"]
+
+auth_ips = ["127.0.0.1","192.168.1.131"]
 request_counts = {}
 RATE_LIMIT = 10
 TIME_WINDOW = 60
@@ -94,6 +102,7 @@ async def check_authorization(request: Request, call_next):
                     "datetime": datetime.datetime.now().strftime("%x %X.%f"),
                     "details": {
                         "message": "Su IP no está autorizada para realizar peticiones a la API.",
+                        "ip": request.client.host
                     }
             })
     if "X-API-Key" in request.headers:
@@ -122,10 +131,7 @@ async def check_authorization(request: Request, call_next):
                 }
         })
 
+
 app.include_router(vagrant.router)
 app.include_router(users.router)
-
-@app.get("/healthcheck")
-def checkhealth():
-    return {"status": "ok"}
 

@@ -12,13 +12,8 @@ from ..database.database import Vm, Venv, Host, SessionDep
 
 router = APIRouter()
 
-base_path = os.getenv("USERS_PATH")
-if base_path is None:
-    raise RuntimeError("La variable de entorno USERS_PATH no se ha cargado.")
-
-temp_dir = os.getenv("TEMP_DIR")
-if temp_dir is None:
-    raise RuntimeError("La variable de entorno TEMP_DIR no se ha cargado.")
+users_path = os.getenv("USERS_PATH")
+tmpl_dir = os.getenv("TMPL_DIR")
 
 boxes = {
         "ubuntu/jammy64": {"providers": ["virtualbox"], "space": 40},
@@ -36,9 +31,10 @@ class Vagr_info(BaseModel):
 
 @router.post("/{usr}/create_env", status_code=status.HTTP_201_CREATED)
 def create_env(usr: str, body: Vagr_info, session: SessionDep):
+    assert users_path
     body.env_name = os.path.basename(body.env_name) # deletes paths for unwanted subdirectories
-    env_path = os.path.normpath(base_path+usr+"/"+body.env_name)
-    usr_path = os.path.normpath(base_path+usr)
+    env_path = os.path.normpath(users_path+usr+"/"+body.env_name)
+    usr_path = os.path.normpath(users_path+usr)
     response: Response
 
     if not os.path.isdir(usr_path):
@@ -101,34 +97,9 @@ class State(BaseModel):
 class Global_state(BaseModel):
     state_list: list[State] = []
 
-
-@router.get("/{usr}/{env_name}")
-def get_state(usr, env_name) -> State:
-    env_path = os.path.normpath(base_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(base_path+usr)
-
-    if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el usuario.",
-            "user": usr
-            }
-        )
-    if not os.path.isdir(env_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el entorno.",
-            "env": env_name
-            }
-        )
-
-    state = State(env_name = env_name)
-    with vagrant_run(env_path) as v:
-        state.machines = v.status()
-
-    return state
-
-@router.get("/{usr}/")
-def global_state(usr) -> Global_state:
-    usr_path = os.path.normpath(base_path+usr)
+@router.get("/{usr}/global_state")
+def get_global_state(usr) -> Global_state:
+    usr_path = os.path.normpath(users_path+usr)
 
     if not os.path.isdir(usr_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
@@ -149,10 +120,34 @@ def global_state(usr) -> Global_state:
 
     return global_state
 
+@router.get("/{usr}/{env_name}")
+def get_state(usr, env_name) -> State:
+    env_path = os.path.normpath(users_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(users_path+usr)
+
+    if not os.path.isdir(usr_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
+            "user": usr
+            }
+        )
+    if not os.path.isdir(env_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el entorno.",
+            "env": env_name
+            }
+        )
+
+    state = State(env_name = env_name)
+    with vagrant_run(env_path) as v:
+        state.machines = v.status()
+
+    return state
+
 @router.delete("/{usr}/{env_name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_env(usr, env_name, session: SessionDep):
-    env_path = os.path.normpath(base_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(base_path+usr)
+    env_path = os.path.normpath(users_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(users_path+usr)
 
     if not os.path.isdir(usr_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
@@ -191,8 +186,8 @@ def delete_env(usr, env_name, session: SessionDep):
 
 @router.put("/{usr}/{env_name}/up")
 def vagrant_up(usr, env_name):
-    env_path = os.path.normpath(base_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(base_path+usr)
+    env_path = os.path.normpath(users_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(users_path+usr)
     response: Response
 
     if not os.path.isdir(usr_path):
@@ -216,8 +211,8 @@ def vagrant_up(usr, env_name):
     
 @router.put("/{usr}/{env_name}/halt", status_code=status.HTTP_204_NO_CONTENT)
 def vagrant_halt(usr, env_name):
-    env_path = os.path.normpath(base_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(base_path+usr)
+    env_path = os.path.normpath(users_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(users_path+usr)
 
     if not os.path.isdir(usr_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
@@ -261,8 +256,32 @@ def validate_vagrant_info(vagr_info):
                 "mem": vagr_info.mem
                 })
 
+@router.get("/{usr}/{env_name}/connection_info")
+def vagrant_conn_info(usr, env_name):
+    env_path = os.path.normpath(users_path+usr+"/"+env_name)
+    usr_path = os.path.normpath(users_path+usr)
+    response: Response
+
+    if not os.path.isdir(usr_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el usuario.",
+            "user": usr
+            }
+        )
+    if not os.path.isdir(env_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "message": "No se ha encontrado el entorno.",
+            "env": env_name
+            }
+        )
+
+    with vagrant_run(env_path) as v:
+        response = create_response(v.conf())
+    return response
+
 def load_template(path, body):
-    env = Environment(loader=FileSystemLoader(temp_dir))
+    assert tmpl_dir
+    env = Environment(loader=FileSystemLoader(tmpl_dir))
     template = env.get_template("vagrantfile.template")
     contenido = template.render(body)
 

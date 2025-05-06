@@ -2,9 +2,8 @@ import os
 from typing import Annotated
 from fastapi import Depends
 from sqlmodel import Field, SQLModel, create_engine, Session
-from dotenv import load_dotenv
 
-load_dotenv()
+DB = os.getenv("DATABASE")
 
 class Vm(SQLModel, table=True):
     vm_id: int | None = Field(default=None, primary_key=True)
@@ -28,9 +27,6 @@ class Host(SQLModel, table=True):
     free_mem: int
     free_space: int
 
-DB = os.getenv("DATABASE")
-if DB is None:
-    raise RuntimeError("La variable de entorno DATABASE no se ha cargado.")
 
 sqlite_url = f"sqlite:///{DB}"
 
