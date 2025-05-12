@@ -11,10 +11,6 @@ from fastapi import HTTPException, status
 
 log_file = os.getenv("LOG_FILE")
 
-print("Esto es dependencies:  ")
-print(os.getcwd())
-print("\n")
-
 log = logging.getLogger(__name__)
 logging.basicConfig(
         format="%(asctime)s - %(levelname)s: %(message)s",
@@ -25,15 +21,23 @@ log_cm = vagrant.make_file_cm(log_file)
 @contextlib.contextmanager
 def vagrant_run(path):
     abspath = os.path.abspath(path)
+
+    log_cm = vagrant.make_file_cm(abspath+"/vagrant_error.log", 'w')
     v = vagrant.Vagrant(
             root=abspath,  #confirmar que el abspath existe antes, si no existe no hace nada
             # Tampoco manda ninguna clase de error.
-            err_cm=vagrant.stderr_cm,
+            err_cm=log_cm,
             out_cm=vagrant.stdout_cm
             )
     try:
         yield v
     except Exception as err:
+        message = ""
+        with open(abspath+"/vagrant_error.log") as error:
+            for line in error.readlines():
+                message = message + line[:-1] + " "
+                print(message)
+            
         pid = None
         for proc in psutil.process_iter(["name", "pid"]):
             if proc.info["name"] == "vagrant":
@@ -43,8 +47,8 @@ def vagrant_run(path):
                 time.sleep(3)
             else:
                 pid = None
+
         if "up" in err.args[1] and (len(err.args[1]) == 3):
-            
             v.destroy()
             shutil.rmtree(path)
             with get_session() as session:
@@ -64,20 +68,8 @@ def vagrant_run(path):
                 session.delete(vm)
                 session.delete(env)
                 session.commit()
+
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail={
-            "message": "Ha ocurrido un error en Vagrant.",
-            #"message": f"El comando 'vagrant {err.args[1][1]} {err.args[1][2]}' ha devuelto un estado de salida {err.args[0]}.",
+            "message": message[7:-5],
                 }
         )
-
-class Response():
-    hostName: str
-    user: str
-    port: int
-
-def parse_response(conf):
-    response = Response()
-    response.hostName = conf["HostName"]
-    response.port = conf["Port"]
-
-

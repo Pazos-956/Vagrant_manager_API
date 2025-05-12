@@ -1,5 +1,6 @@
 import os
 import datetime
+import re
 from time import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, status
@@ -14,9 +15,12 @@ from .database import database
 api_key = os.getenv("API_KEY")
 log_file = os.getenv("LOG_FILE")
 DB = os.getenv("DATABASE")
+auth_ips = os.getenv("AUTH_IPS")
 
 if api_key is None:
     raise RuntimeError("La variable de entorno api_key no se ha cargado.")
+if auth_ips is None:
+    raise RuntimeError("La variable de entorno auth_ips no se ha cargado.")
 if log_file is None:
     raise RuntimeError("La variable de entorno LOG_FILE no se ha cargado.")
 if DB is None:
@@ -26,8 +30,7 @@ if os.getenv("TMPL_DIR") is None:
 if os.getenv("USERS_PATH") is None:
     raise RuntimeError("La variable de entorno api_key no se ha cargado.")
 
-
-auth_ips = ["127.0.0.1","192.168.1.131"]
+auth_ips = re.split(r'\s+',auth_ips)
 request_counts = {}
 RATE_LIMIT = 10
 TIME_WINDOW = 60
@@ -91,45 +94,45 @@ async def request_limit_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
-@app.middleware("http")
-async def check_authorization(request: Request, call_next):
-    assert request.client is not None
-    if request.client.host not in auth_ips:
-            return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
-                content={
-                    "status": status.HTTP_403_FORBIDDEN,
-                    "path": request.url.path,
-                    "datetime": datetime.datetime.now().strftime("%x %X.%f"),
-                    "details": {
-                        "message": "Su IP no está autorizada para realizar peticiones a la API.",
-                        "ip": request.client.host
-                    }
-            })
-    if "X-API-Key" in request.headers:
-        token = request.headers["X-API-Key"]
-        if token == api_key:
-            response = await call_next(request)
-            return response
-        else:
-            return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
-                content={
-                    "status": status.HTTP_403_FORBIDDEN,
-                    "path": request.url.path,
-                    "datetime": datetime.datetime.now().strftime("%x %X.%f"),
-                    "details":{
-                        "message": "La API-key proporcionada es inválida.",
-                    }
-            })
-    else:
-        return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
-            content={
-                "status": status.HTTP_403_FORBIDDEN,
-                "path": request.url.path,
-                "datetime": datetime.datetime.now().strftime("%x %X.%f"),
-                "details":{
-                    "message": "No se ha proporcionado la API-key, añada la cabecera X-API-Key.",
-                }
-        })
+# @app.middleware("http")
+# async def check_authorization(request: Request, call_next):
+#     assert request.client is not None
+#     if request.client.host not in auth_ips:
+#             return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
+#                 content={
+#                     "status": status.HTTP_403_FORBIDDEN,
+#                     "path": request.url.path,
+#                     "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+#                     "details": {
+#                         "message": "Su IP no está autorizada para realizar peticiones a la API.",
+#                         "ip": request.client.host
+#                     }
+#             })
+#     if "X-API-Key" in request.headers:
+#         token = request.headers["X-API-Key"]
+#         if token == api_key:
+#             response = await call_next(request)
+#             return response
+#         else:
+#             return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
+#                 content={
+#                     "status": status.HTTP_403_FORBIDDEN,
+#                     "path": request.url.path,
+#                     "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+#                     "details":{
+#                         "message": "La API-key proporcionada es inválida.",
+#                     }
+#             })
+#     else:
+#         return JSONResponse(status_code=status.HTTP_403_FORBIDDEN,
+#             content={
+#                 "status": status.HTTP_403_FORBIDDEN,
+#                 "path": request.url.path,
+#                 "datetime": datetime.datetime.now().strftime("%x %X.%f"),
+#                 "details":{
+#                     "message": "No se ha proporcionado la API-key, añada la cabecera X-API-Key.",
+#                 }
+#         })
 
 
 app.include_router(vagrant.router)

@@ -63,6 +63,7 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
         env = Venv(env_path = env_path, host_id = host.host_id)
         session.add(env)
         session.commit()
+
         vm = Vm(
                 vm_name = body.hostname,
                 cpu = body.cpu,
@@ -76,9 +77,11 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
         host.free_space -= vm.space
         session.add(host)
         session.commit()
+        
+        open(env_path+"/script.sh",'a').close()
         with vagrant_run(env_path) as v:
             v.up(provider=body.provider)
-            response = create_response(v.conf())
+            response = create_response(v.conf(), env_path)
     
     else:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={
@@ -122,21 +125,7 @@ def get_global_state(usr) -> Global_state:
 
 @router.get("/{usr}/{env_name}")
 def get_state(usr, env_name) -> State:
-    env_path = os.path.normpath(users_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(users_path+usr)
-
-    if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el usuario.",
-            "user": usr
-            }
-        )
-    if not os.path.isdir(env_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el entorno.",
-            "env": env_name
-            }
-        )
+    _, env_path = validate_new_route(usr, env_name)
 
     state = State(env_name = env_name)
     with vagrant_run(env_path) as v:
@@ -146,21 +135,7 @@ def get_state(usr, env_name) -> State:
 
 @router.delete("/{usr}/{env_name}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_env(usr, env_name, session: SessionDep):
-    env_path = os.path.normpath(users_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(users_path+usr)
-
-    if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el usuario.",
-            "user": usr
-            }
-        )
-    if not os.path.isdir(env_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el entorno.",
-            "env": env_name
-            }
-        )
+    _, env_path = validate_new_route(usr, env_name)
 
     statement = select(Vm, Venv).where(Vm.env_id == Venv.env_id).where(Venv.env_path == env_path)
     result = session.exec(statement).one()
@@ -186,31 +161,50 @@ def delete_env(usr, env_name, session: SessionDep):
 
 @router.put("/{usr}/{env_name}/up")
 def vagrant_up(usr, env_name):
-    env_path = os.path.normpath(users_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(users_path+usr)
+    _, env_path = validate_new_route(usr, env_name)
     response: Response
-
-    if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el usuario.",
-            "user": usr
-            }
-        )
-    if not os.path.isdir(env_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el entorno.",
-            "env": env_name
-            }
-        )
 
     with vagrant_run(env_path) as v:
         v.up()
-        response = create_response(v.conf())
+        response = create_response(v.conf(), env_path)
     return response
 
     
 @router.put("/{usr}/{env_name}/halt", status_code=status.HTTP_204_NO_CONTENT)
 def vagrant_halt(usr, env_name):
+    _, env_path = validate_new_route(usr, env_name)
+
+    with vagrant_run(env_path) as v:
+        v.halt()
+    return
+
+@router.put("/{usr}/{env_name}/suspend", status_code=status.HTTP_204_NO_CONTENT)
+def vagrant_suspend(usr, env_name):
+    _, env_path = validate_new_route(usr, env_name)
+
+    with vagrant_run(env_path) as v:
+        v.suspend()
+    return
+
+@router.get("/{usr}/{env_name}/connection_info")
+def vagrant_conn_info(usr, env_name):
+    _, env_path = validate_new_route(usr, env_name)
+    response: Response
+
+    with vagrant_run(env_path) as v:
+        response = create_response(v.conf(), env_path)
+    return response
+
+@router.put("/{usr}/{env_name}/provision", status_code=status.HTTP_204_NO_CONTENT)
+def vagrant_provision(usr, env_name):
+    _, env_path = validate_new_route(usr, env_name)
+
+    with vagrant_run(env_path) as v:
+        v.provision(provision_with=["optional"])
+
+    return
+
+def validate_new_route(usr, env_name):
     env_path = os.path.normpath(users_path+usr+"/"+env_name)
     usr_path = os.path.normpath(users_path+usr)
 
@@ -226,11 +220,7 @@ def vagrant_halt(usr, env_name):
             "env": env_name
             }
         )
-
-    with vagrant_run(env_path) as v:
-        v.halt()
-    return
-
+    return usr_path, env_path
 
 def validate_vagrant_info(vagr_info):
     if not vagr_info.boxname in boxes:
@@ -256,28 +246,6 @@ def validate_vagrant_info(vagr_info):
                 "mem": vagr_info.mem
                 })
 
-@router.get("/{usr}/{env_name}/connection_info")
-def vagrant_conn_info(usr, env_name):
-    env_path = os.path.normpath(users_path+usr+"/"+env_name)
-    usr_path = os.path.normpath(users_path+usr)
-    response: Response
-
-    if not os.path.isdir(usr_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el usuario.",
-            "user": usr
-            }
-        )
-    if not os.path.isdir(env_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
-            "message": "No se ha encontrado el entorno.",
-            "env": env_name
-            }
-        )
-
-    with vagrant_run(env_path) as v:
-        response = create_response(v.conf())
-    return response
 
 def load_template(path, body):
     assert tmpl_dir
@@ -294,11 +262,32 @@ class Response():
     user: str
     port: int
 
-def create_response(conf):
+def create_response(conf, env_path):
     response = Response()
-    response.hostName = conf["HostName"]
+    provider = ""
+
+    with open(env_path+"/Vagrantfile") as vf:
+        for row in vf.readlines():
+            if row.find("libvirt") != -1:
+                provider = "libvirt"
+                break
+            if row.find("virtualbox") != -1:
+                provider = "virtualbox"
+                break
+            if row.find("vmware_desktop") != -1:
+                provider = "vmware_desktop"
+                break
+                
     response.user = conf["Host"]
     response.port = conf["Port"]
+
+    if provider == "libvirt":
+        response.port = 2222
+
+    ip = os.popen('ip addr show enp2s0 | grep "inet " | awk \'{ print $2 }\' | awk -F "/" \'{print $1}\'').read().strip()
+    response.hostName = ip
+
+
     return response
 
 

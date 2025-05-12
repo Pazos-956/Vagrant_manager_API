@@ -1,3 +1,6 @@
+# Preparación
+* Para iniciar vmware asegurarse de que está iniciado `vmware-networks-configuration.service` y `vmware-networks.service`.
+También tener cargados los módulos de vmware `modprobe -a vmw_vmci vmmon`
 # Troubleshooting
 * Si libvirt no es capaz de conectar a libvirt-sock, comprueba que libvirtd.service está activo.
 * Si en libvirt sale el mensaje:
