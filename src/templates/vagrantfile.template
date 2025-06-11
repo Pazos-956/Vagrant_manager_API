@@ -44,7 +44,7 @@ Vagrant.configure("2") do |config|
       vmw.vmx["memsize"] = MEM
       vmw.vmx["cpuid.coresPerSocket"] = "1"
       vmw.vmx["ethernet0.pcislotnumber"] = "32"
-      vmw.gui = true
+      vmw.gui = false
       vmw.linked_clone = false
   end
 

@@ -62,8 +62,6 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
         load_template(env_path, body)
         env = Venv(env_path = env_path, host_id = host.host_id)
         session.add(env)
-        session.commit()
-
         vm = Vm(
                 vm_name = body.hostname,
                 cpu = body.cpu,
