@@ -62,6 +62,7 @@ def create_env(usr: str, body: Vagr_info, session: SessionDep):
         load_template(env_path, body)
         env = Venv(env_path = env_path, host_id = host.host_id)
         session.add(env)
+        session.commit()
         vm = Vm(
                 vm_name = body.hostname,
                 cpu = body.cpu,
@@ -99,7 +100,7 @@ class Global_state(BaseModel):
     state_list: list[State] = []
 
 @router.get("/{usr}/global_state")
-def get_global_state(usr) -> Global_state:
+def get_global_state(usr) -> list[State]:
     usr_path = os.path.normpath(users_path+usr)
 
     if not os.path.isdir(usr_path):
@@ -109,7 +110,7 @@ def get_global_state(usr) -> Global_state:
             }
         )
 
-    global_state = Global_state()
+    state_list = []
     with os.scandir(usr_path) as entries:
         for entry in entries:
             if not entry.is_dir():
@@ -117,9 +118,9 @@ def get_global_state(usr) -> Global_state:
             with vagrant_run(entry) as v:
                 env_state = State(env_name = entry.name)
                 env_state.machines = v.status()
-                global_state.state_list.append(env_state)
+                state_list.append(env_state)
 
-    return global_state
+    return state_list
 
 @router.get("/{usr}/{env_name}")
 def get_state(usr, env_name) -> State:
@@ -131,12 +132,19 @@ def get_state(usr, env_name) -> State:
 
     return state
 
-@router.delete("/{usr}/{env_name}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{usr}/{env_name}/delete", status_code=status.HTTP_204_NO_CONTENT)
 def delete_env(usr, env_name, session: SessionDep):
     _, env_path = validate_new_route(usr, env_name)
 
     statement = select(Vm, Venv).where(Vm.env_id == Venv.env_id).where(Venv.env_path == env_path)
-    result = session.exec(statement).one()
+    try:
+        result = session.exec(statement).one()
+    except Exception as err:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={
+            "err": err.args
+            }
+        )
+
     host = session.exec(select(Host)).first()
     if host == None:
         raise AttributeError("El host está vacio")
@@ -282,7 +290,7 @@ def create_response(conf, env_path):
     if provider == "libvirt":
         response.port = 2222
 
-    ip = os.popen('ip addr show enp2s0 | grep "inet " | awk \'{ print $2 }\' | awk -F "/" \'{print $1}\'').read().strip()
+    ip = os.popen('ip addr show | awk \'/inet.*brd/{print $2}\' | head -1 | awk -F "/" \'{print $1}\'').read().strip()
     response.hostName = ip
 
 

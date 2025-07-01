@@ -30,7 +30,7 @@ class Host(SQLModel, table=True):
 
 sqlite_url = f"sqlite:///{DB}"
 
-engine = create_engine(sqlite_url, echo=True)
+engine = create_engine(sqlite_url)
 
 # Esto crea una sesión y la devuelve, para que al acabar la petición se libere automáticamente
 def get_session_parameter():
