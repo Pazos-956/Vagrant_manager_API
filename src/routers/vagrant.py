@@ -264,35 +264,25 @@ def load_template(path, body):
         file.write(contenido)
 
 class Response():
-    hostName: str
+    ip: str
     user: str
-    port: int
+    port: str
 
 def create_response(conf, env_path):
     response = Response()
-    provider = ""
+
+    process = os.popen('ip addr show | awk \'/inet.*brd/{print $2}\' | head -1 | awk -F "/" \'{print $1}\'')
+    ip = process.read().strip()
+    process.close()
+    response.ip = ip
 
     with open(env_path+"/Vagrantfile") as vf:
-        for row in vf.readlines():
-            if row.find("libvirt") != -1:
-                provider = "libvirt"
-                break
-            if row.find("virtualbox") != -1:
-                provider = "virtualbox"
-                break
-            if row.find("vmware_desktop") != -1:
-                provider = "vmware_desktop"
-                break
-                
+        row = vf.readlines()
+        if row[4].find("libvirt") != -1:
+            response.port = "2222"
+        else:
+            response.port = conf["Port"]
     response.user = conf["Host"]
-    response.port = conf["Port"]
-
-    if provider == "libvirt":
-        response.port = 2222
-
-    ip = os.popen('ip addr show | awk \'/inet.*brd/{print $2}\' | head -1 | awk -F "/" \'{print $1}\'').read().strip()
-    response.hostName = ip
-
 
     return response
 
